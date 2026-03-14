@@ -114,7 +114,7 @@ void setup() {
   delay(1000);
   
   pinMode(23, OUTPUT); // Устанавливаем пин 23 как выход
-  digitalWrite(23, HIGH); // инверсная логика
+  digitalWrite(23, LOW); // инверсная логика
 }
 
 void loop() {
@@ -147,10 +147,10 @@ void loop() {
   sprintf(big_data + strlen(big_data), "{v:%.2f,p:%.2f,a:%.2f,ms:%d,pf:%.2f,kwt:%.2f,kwts:%.2f,ps:%.2f,as:%.2f,pfs:%.2f,wf:%.2f}", v, p, a, millis(), pf, kwt, kwt_solar, p_solar, a_solar, pf_solar, rssi);
 
   if (p_solar > 170) {
-    digitalWrite(23, LOW); // Включаем пин 23 (на нем появляется 3.3В)
+    digitalWrite(23, HIGH); // Включаем пин 23 (на нем появляется 3.3В)
   } 
   if (p_solar < 120) {
-    digitalWrite(23, HIGH);  // Выключаем пин 23
+    digitalWrite(23, LOW);  // Выключаем пин 23
   }
   
   //Serial.println(big_data);
