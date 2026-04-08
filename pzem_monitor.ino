@@ -24,6 +24,11 @@ int limit_for_http = 50; // после этого цикла отправка
 int loop_counter = 0; // колво циклов сейчас
 int wf_attempt = 0;
 
+int stage_now = 90; // 90 80 70 60 50 40
+int old_stage = 90;
+
+int new_pf;
+
 
 char big_data[20000] = "val=";
 
@@ -114,8 +119,36 @@ void setup() {
   delay(1000);
   
   pinMode(23, OUTPUT); // Устанавливаем пин 23 как выход
-  digitalWrite(23, LOW); // инверсная логика
+  digitalWrite(23, LOW);
+
+  pinMode(32, OUTPUT); // 80
+  pinMode(33, OUTPUT); // 70
+  pinMode(25, OUTPUT); // 60
+  pinMode(26, OUTPUT); // 50
+  pinMode(27, OUTPUT); // 40
+
+  digitalWrite(32, LOW); // 80
+  digitalWrite(33, LOW); // 70
+  digitalWrite(25, LOW); // 60
+  digitalWrite(26, LOW); // 50
+  digitalWrite(27, LOW); // 40
 }
+
+void set_stage(int stage){
+  
+  digitalWrite(32, LOW); // 80
+  digitalWrite(33, LOW); // 70
+  digitalWrite(25, LOW); // 60
+  digitalWrite(26, LOW); // 50
+  digitalWrite(27, LOW); // 40
+  
+       if(stage == 80){ digitalWrite(32, HIGH); }
+  else if(stage == 70){ digitalWrite(33, HIGH); }
+  else if(stage == 60){ digitalWrite(25, HIGH); }
+  else if(stage == 50){ digitalWrite(26, HIGH); }
+  else if(stage == 40){ digitalWrite(27, HIGH); }
+  
+  }
 
 void loop() {
 
@@ -152,8 +185,26 @@ void loop() {
   if (p_solar < 120) {
     digitalWrite(23, LOW);  // Выключаем пин 23
   }
-  
-  //Serial.println(big_data);
+
+
+
+int pf_int_now = (int)(pf * 100.0f + 0.5f);
+
+if (pf_int_now > 0 && pf_int_now <= 100) {
+    if      (pf_int_now >= 85){ stage_now = 90; }
+    else if (pf_int_now >= 75){ stage_now = 80; }
+    else if (pf_int_now >= 65){ stage_now = 70; }
+    else if (pf_int_now >= 55){ stage_now = 60; }
+    else if (pf_int_now >= 45){ stage_now = 50; }
+    else                      { stage_now = 40; }
+
+    if (stage_now != old_stage) {
+        set_stage(stage_now);
+        old_stage = stage_now;
+    }
+}
+
+ 
   
   if(loop_counter == limit_for_http){
     send_http();
