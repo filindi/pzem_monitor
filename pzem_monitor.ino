@@ -1,19 +1,3 @@
-/*
-Copyright (c) 2021 Jakub Mandula
-
-Example of using one PZEM module with Software Serial interface.
-================================================================
-
-If only RX and TX pins are passed to the constructor, software 
-serial interface will be used for communication with the module.
-
-memset(big_data, 0, sizeof(big_data)); // обнуление данных в переменной
-
-
-
-{v:200,p:2500,a:40,ms:123123123123123,pf:50.25,kwt:8000,kwts:60000,ps:500,as:20,pfs:1000,wf:60.55}
-
-*/
 
 #include <PZEM004Tv30.h>
 #include <HTTPClient.h>
@@ -22,53 +6,48 @@ memset(big_data, 0, sizeof(big_data)); // обнуление данных в п�
 
 int limit_for_http = 50; // после этого цикла отправка
 int loop_counter = 0; // колво циклов сейчас
-int wf_attempt = 0;
+
 
 int stage_now = 90; // 90 80 70 60 50 40
 int old_stage = 90;
 
-int new_pf;
+int burden_switch_counter = 0;
+
+bool burden_corrector = false;
 
 
-char big_data[20000] = "val=";
+char big_data[40000] = "val=";
 
-PZEM004Tv30 pzem(Serial2, 19, 18);        // общая сеть
-PZEM004Tv30 solar_pzem(Serial1, 17, 16);  // солнце
+PZEM004Tv30 pzem(Serial2, 19, 18);        // (rxPin, txPin) общая сеть
+PZEM004Tv30 solar_pzem(Serial1, 17, 16);  // (rxPin, txPin) солнце
+
 
 
 void wifi_connection(){
-  wf_attempt++;
+  delay(1000);
 
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname("electromer");
+  
   WiFi.begin("netis_kitchen", "password"); 
-  //WiFi.begin("netis_7AB60F", "password");  
-  //WiFi.begin("netis_2.4G_007C9D", "d11v09n03");
-  
-  Serial.print("Connecting to WiFi");
+  //WiFi.begin("netis_7AB60F", "password"); 
 
-  
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
   }
-
-  WiFi.setHostname("electromer");
-
-  Serial.print("OK! IP=");
-  Serial.println(WiFi.localIP());
+  
 }
 
 
 void send_http(){
-  Serial.println("send_http_func");
   
   // проверка статуса вайфай рестарт если что:
-  if (WiFi.status() != WL_CONNECTED || limit_for_http == 100 || limit_for_http == 150){
-    sprintf(big_data + strlen(big_data), "|wifi_restart_status_error:%d,limit_now:%d|", WiFi.status(), limit_for_http);
+  if (WiFi.status() != WL_CONNECTED){
     WiFi.disconnect();
     wifi_connection();
   }
 
-  sprintf(big_data + strlen(big_data), "|wf_stat:%d,wf_attempt:%d,before_http_ms:%d,limit_now:%d|", WiFi.status(), wf_attempt, millis(), limit_for_http);
   
   // Указываем URL и данные для POST запроса
   HTTPClient http;
@@ -76,42 +55,30 @@ void send_http(){
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
   
   // Отправляем POST запрос
-  float httpResponseCode = http.POST(big_data);
+  int httpResponseCode = http.POST(big_data);
   String payload;
   if (httpResponseCode == 200) {    
     payload = http.getString();
-    //Serial.print("HTTP Response code: ");
-    //Serial.println(httpResponseCode);
-    //Serial.println(payload);    
-  }
-    
-  //Serial.println("end http: "+String(millis()));
-  //Serial.println("html_result:  "+payload);
+  }    
+
   http.end();  
 
-  if(payload == "ok" || limit_for_http > 101){
+  if(payload == "ok" || limit_for_http > 303){
     // перезапись переменной
     loop_counter = 0;
     limit_for_http =50;
     memset(big_data, 0, sizeof(big_data));
-    strcat(big_data, "val="); // обнуляем большую строку
-
-     if(payload == "ok"){
-      sprintf(big_data + strlen(big_data), "|success_after_http_ms:%d,http_response:%s,http_reponse_code:%.2f|", millis(), payload.c_str(), httpResponseCode);
-    } else {
-      sprintf(big_data + strlen(big_data), "|more_then_600_error_after_http_ms:%d,http_response:%s,http_reponse_code:%.2f|", millis(), payload.c_str(), httpResponseCode);
-    }    
+    strcat(big_data, "val="); // обнуляем большую строку     
   } else {
     // отправлено не было продолжаем запись в переменную
     limit_for_http +=50;
-    sprintf(big_data + strlen(big_data), "|after_http_not_send_ms:%d,http_response:%s,http_reponse_code:%.2f|", millis(), payload.c_str(), httpResponseCode);
   }
   
 }
 
 
 void setup() {
-  delay(4000);
+  delay(1000);
   Serial.begin(115200);
 
   delay(1000);
@@ -165,19 +132,20 @@ void loop() {
   float a_solar = solar_pzem.current();       // 
   float pf_solar = solar_pzem.pf();       // 
   float kwt_solar = solar_pzem.energy();    // сумма КВТ
+
+  if (!isfinite(p)) p = 0;
+  if (!isfinite(pf)) pf = 0;
+  if (!isfinite(v)) v = 0;
+  if (!isfinite(a)) a = 0;
+  if (!isfinite(kwt)) kwt = 0;
   
-  float rssi = WiFi.RSSI();  // wi-fi dbi
+  if (!isfinite(p_solar)) p_solar = 0;
+  if (!isfinite(a_solar)) a_solar = 0;
+  if (!isfinite(pf_solar)) pf_solar = 0;
+  if (!isfinite(kwt_solar)) kwt_solar = 0;
   
-  /*
-  float p = 1;       // мощность квт
-  float pf = 2;        // фактор
-  float v = 3;     // напряжение В
-  float a = 4;     // Ток А
-  float kwt = 5; // сумма КВТ
-  float rssi = 6;  // wi-fi dbi
-  */
   
-  sprintf(big_data + strlen(big_data), "{v:%.2f,p:%.2f,a:%.2f,ms:%d,pf:%.2f,kwt:%.2f,kwts:%.2f,ps:%.2f,as:%.2f,pfs:%.2f,wf:%.2f}", v, p, a, millis(), pf, kwt, kwt_solar, p_solar, a_solar, pf_solar, rssi);
+  sprintf(big_data + strlen(big_data), "{%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%lu}", v, p, a, pf, kwt, kwt_solar, p_solar, a_solar, pf_solar, WiFi.RSSI(), stage_now, burden_switch_counter, millis());
 
   if (p_solar > 170) {
     digitalWrite(23, HIGH); // Включаем пин 23 (на нем появляется 3.3В)
@@ -188,21 +156,41 @@ void loop() {
 
 
 
-int pf_int_now = (int)(pf * 100.0f + 0.5f);
+if(v > 0 && kwt_solar > 0){
 
-if (pf_int_now > 0 && pf_int_now <= 100) {
-    if      (pf_int_now >= 85){ stage_now = 90; }
-    else if (pf_int_now >= 75){ stage_now = 80; }
-    else if (pf_int_now >= 65){ stage_now = 70; }
-    else if (pf_int_now >= 55){ stage_now = 60; }
-    else if (pf_int_now >= 45){ stage_now = 50; }
-    else                      { stage_now = 40; }
-
-    if (stage_now != old_stage) {
-        set_stage(stage_now);
-        old_stage = stage_now;
+    if(!burden_corrector && p < 550 && p_solar > p+10){
+      // потребление меньше 600 и генерация превысила потребление включаем режим коррекции
+      burden_corrector = true;
+      }
+  
+    if (burden_corrector && p < 500 && p_solar > 0 && p > p_solar * 1.3) {
+      // режим коррекции был включен но генерация все равно не дотягивает смылса в бурдене нет
+        burden_corrector = false;
+        old_stage = 90;
+        stage_now = 90;
+        set_stage(stage_now);      
+      }
+  
+    if(burden_corrector){
+      int pf_int_now = (int)(pf * 100.0f + 0.5f);
+      if (pf_int_now > 0 && pf_int_now <= 100) {
+          if      (pf_int_now >= 85){ stage_now = 90; }
+          else if (pf_int_now >= 75){ stage_now = 80; }
+          else if (pf_int_now >= 65){ stage_now = 70; }
+          else if (pf_int_now >= 55){ stage_now = 60; }
+          else if (pf_int_now >= 45){ stage_now = 50; }
+          else                      { stage_now = 40; }
+      
+          if (stage_now != old_stage) {
+              set_stage(stage_now);
+              old_stage = stage_now;
+              burden_switch_counter++;
+          }
+      }
     }
+
 }
+
 
  
   
