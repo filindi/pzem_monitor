@@ -13,6 +13,8 @@ int old_stage = 90;
 
 int burden_switch_counter = 0;
 
+int stop_score = 0;
+
 bool burden_corrector = false;
 
 
@@ -159,19 +161,40 @@ void loop() {
 if(v > 0 && kwt_solar > 0){
 
     if(!burden_corrector && p < 550 && p_solar > p+10){
-      // потребление меньше 600 и генерация превысила потребление включаем режим коррекции
+      // потребление меньше 550 и генерация превысила потребление включаем режим коррекции
       burden_corrector = true;
+      stop_score = 120;
       }
   
-    if (burden_corrector && p < 500 && p_solar > 0 && p > p_solar * 1.3) {
-      // режим коррекции был включен но генерация все равно не дотягивает смылса в бурдене нет
-        burden_corrector = false;
-        old_stage = 90;
-        stage_now = 90;
-        set_stage(stage_now);      
+    if (burden_corrector && p < 550 && p > p_solar * 1.3) {
+        // режим коррекции был включен но генерация все равно не дотягивает смылса в бурдене нет
+        if(stop_score == 0){
+          // прошло 120 очков генерация не дотянула
+          burden_corrector = false;
+          old_stage = 90;
+          stage_now = 90;
+          set_stage(stage_now);
+        } else {
+          stop_score--;
+        }     
+    } else {
+        // 20 минут это 120
+        if(p < p_solar * 1.2 || p_solar > 510){
+          // идет штатная работа солнце и дом рядо или солнце просто на макчимуме
+          stop_score = 120;
+        }
+    }
+
+ 
+
+    bool block_burden_action = false;
+    if(burden_corrector && p > 550 && p_solar > 50 && p*stage_now/100 > 550){
+      // блокируем переключение если потребление высокое и потолок генерации даже с корректором выше максимальных 550 ватт
+      block_burden_action = true;
       }
   
-    if(burden_corrector){
+    if(burden_corrector && !block_burden_action){ 
+      
       int pf_int_now = (int)(pf * 100.0f + 0.5f);
       if (pf_int_now > 0 && pf_int_now <= 100) {
           if      (pf_int_now >= 85){ stage_now = 90; }
